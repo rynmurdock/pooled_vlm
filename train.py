@@ -66,4 +66,9 @@ for epoch in range(config.epochs):
 
 
 # TODO chart loss
+# TODO verify whether we can do vector arithmetic; add to validation taking addition of two images or something
+
+
+
+
 

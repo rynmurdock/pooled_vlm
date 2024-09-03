@@ -20,7 +20,7 @@ model = InternVLChatModel.from_pretrained(
     trust_remote_code=True,
     ignore_mismatched_sizes=True,
     revision='7f49802f5bf1e6e3d20b6f69268701c7eb67e037').to(config.device)
-tokenizer = AutoTokenizer.from_pretrained(path, trust_remote_code=True, use_fast=False, 
+tokenizer = AutoTokenizer.from_pretrained('OpenGVLab/InternVL2-4B', trust_remote_code=True, use_fast=False, 
                                           revision='7f49802f5bf1e6e3d20b6f69268701c7eb67e037')
 tokenizer.padding_side = 'left'
 
