@@ -14,11 +14,12 @@ import config
 path = config.path
 model = InternVLChatModel.from_pretrained(
     path,
-    torch_dtype=torch.bfloat16,
-    low_cpu_mem_usage=True,
+    torch_dtype=config.dtype,
+    # low_cpu_mem_usage=True,
     use_flash_attn=True,
     trust_remote_code=True,
-    revision='7f49802f5bf1e6e3d20b6f69268701c7eb67e037').eval().cuda()
+    ignore_mismatched_sizes=True,
+    revision='7f49802f5bf1e6e3d20b6f69268701c7eb67e037').to(config.device)
 tokenizer = AutoTokenizer.from_pretrained(path, trust_remote_code=True, use_fast=False, 
                                           revision='7f49802f5bf1e6e3d20b6f69268701c7eb67e037')
 
