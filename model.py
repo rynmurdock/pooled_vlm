@@ -17,7 +17,6 @@ model = InternVLChatModel.from_pretrained(
     torch_dtype=config.dtype,
     # low_cpu_mem_usage=True,
     use_flash_attn=True,
-    trust_remote_code=True,
     ignore_mismatched_sizes=True,
     revision='7f49802f5bf1e6e3d20b6f69268701c7eb67e037').to(config.device)
 tokenizer = AutoTokenizer.from_pretrained('OpenGVLab/InternVL2-4B', trust_remote_code=True, use_fast=False, 
@@ -25,8 +24,10 @@ tokenizer = AutoTokenizer.from_pretrained('OpenGVLab/InternVL2-4B', trust_remote
 tokenizer.padding_side = 'left'
 
 model.mlp1 = model.mlp1.to(torch.float32)
+model.vision_model.encoder = model.vision_model.encoder.to(torch.float32)
+print(model.mlp1, model.vision_model.encoder)
 
-params = list(model.mlp1.parameters())# + list(model.vision_model.encoder.parameters())
+params = list(model.mlp1.parameters()) + list(model.vision_model.encoder.parameters())
 
 print(f'Training: {params}')
 # we will drop all but last patch & train mlp1; mlp1 will be where we do vector arythmetic and probes.

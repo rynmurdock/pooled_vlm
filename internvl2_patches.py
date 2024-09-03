@@ -178,17 +178,20 @@ class InternVLChatModel(PreTrainedModel):
         return x
 
     def extract_feature(self, pixel_values):
-        if self.select_layer == -1:
-            vit_embeds = self.vision_model(
+        # if self.select_layer == -1:
+        #     vit_embeds = self.vision_model(
+        #         pixel_values=pixel_values,
+        #         output_hidden_states=False,
+        #         return_dict=True).last_hidden_state
+        # else:
+        #     vit_embeds = self.vision_model(
+        #         pixel_values=pixel_values,
+        #         output_hidden_states=True,
+        #         return_dict=True).hidden_states[self.select_layer]
+        vit_embeds = self.vision_model(
                 pixel_values=pixel_values,
                 output_hidden_states=False,
-                return_dict=True).last_hidden_state
-        else:
-            vit_embeds = self.vision_model(
-                pixel_values=pixel_values,
-                output_hidden_states=True,
-                return_dict=True).hidden_states[self.select_layer]
-        vit_embeds = vit_embeds[:, :, :].mean(1)
+                return_dict=True).pooler_output
 
         # h = w = int(vit_embeds.shape[1] ** 0.5)
         # vit_embeds = vit_embeds.reshape(vit_embeds.shape[0], h, w, -1)
