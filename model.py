@@ -23,6 +23,9 @@ tokenizer = AutoTokenizer.from_pretrained('OpenGVLab/InternVL2-4B', trust_remote
                                           revision='7f49802f5bf1e6e3d20b6f69268701c7eb67e037')
 tokenizer.padding_side = 'left'
 
+img_context_token_id = tokenizer.convert_tokens_to_ids('<IMG_CONTEXT>')
+model.img_context_token_id = img_context_token_id
+
 model.mlp1 = model.mlp1.to(torch.float32)
 model.vision_model.encoder = model.vision_model.encoder.to(torch.float32)
 print(model.mlp1, model.vision_model.encoder)

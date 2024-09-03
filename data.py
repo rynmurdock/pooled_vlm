@@ -7,7 +7,7 @@ def my_collate(batch):
     try:
       img = [item['image'] for item in batch]
       img = torch.cat([load_image(pil_image=i, image_file=None) for i in img])
-      text = ['<img><IMG_CONTEXT></img>\n '+item['conversations'][1]['value'] for item in batch]
+      text = ['''<|user|><img><IMG_CONTEXT></img><|end|><|assistant|>'''+item['conversations'][1]['value'] for item in batch]
     except:
       return None
     return {'image':img, 'text':text}

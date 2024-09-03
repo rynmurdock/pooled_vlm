@@ -17,7 +17,7 @@ import config
 
 def get_loss(model, input):
     ids = tokenizer(input['text'], return_tensors='pt', padding=True, truncation=True, max_length=config.max_tokens).to(config.device)
-    # print(tokenizer.decode(ids.input_ids[0]))
+    # print(tokenizer.decode(ids.input_ids[0]), 'Training text')
     pixel_values = input['image'].to(config.device, config.dtype)
     pixel_values = torch.nn.functional.interpolate(pixel_values, (224, 224))
     with torch.cuda.amp.autocast(enabled=True, dtype=config.dtype):
@@ -40,7 +40,7 @@ for epoch in range(config.epochs):
                                       (224, 224)), 
                                   question='<image>\n ', 
                                   generation_config = dict(max_new_tokens=config.max_tokens, do_sample=True))
-                print(response)
+                print('\n\n\n', response, '\n\n\n' )
 
                 response = model.chat(tokenizer=tokenizer, 
                                   pixel_values=torch.nn.functional.interpolate(
@@ -48,7 +48,7 @@ for epoch in range(config.epochs):
                                       (224, 224)), 
                                   question='<image>\n ', 
                                   generation_config = dict(max_new_tokens=config.max_tokens, do_sample=True))
-                print(response)
+                print('\n\n\n', response, '\n\n\n' )
 
         loss = get_loss(model, sample)
         print(loss.item())

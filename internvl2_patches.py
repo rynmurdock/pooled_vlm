@@ -98,6 +98,8 @@ class InternVLChatModel(PreTrainedModel):
             output_hidden_states: Optional[bool] = None,
             return_dict: Optional[bool] = None,
     ) -> Union[Tuple, CausalLMOutputWithPast]:
+        assert self.img_context_token_id
+
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         input_embeds = self.language_model.get_input_embeddings()(input_ids)
@@ -265,25 +267,26 @@ class InternVLChatModel(PreTrainedModel):
         self.img_context_token_id = img_context_token_id
 
         template = get_conv_template(self.template)
-        template.system_message = self.system_message
+        # template.system_message = self.system_message
         eos_token_id = tokenizer.convert_tokens_to_ids(template.sep)
 
-        history = [] if history is None else history
-        for (old_question, old_answer) in history:
-            template.append_message(template.roles[0], old_question)
-            template.append_message(template.roles[1], old_answer)
-        template.append_message(template.roles[0], question)
-        template.append_message(template.roles[1], None)
-        query = template.get_prompt()
+        # history = [] if history is None else history
+        # for (old_question, old_answer) in history:
+        #     template.append_message(template.roles[0], old_question)
+        #     template.append_message(template.roles[1], old_answer)
+        # template.append_message(template.roles[0], question)
+        # template.append_message(template.roles[1], None)
+        # query = template.get_prompt()
 
-        if verbose and pixel_values is not None:
-            image_bs = pixel_values.shape[0]
-            print(f'dynamic ViT batch size: {image_bs}')
+        # if verbose and pixel_values is not None:
+        #     image_bs = pixel_values.shape[0]
+        #     print(f'dynamic ViT batch size: {image_bs}')
 
-        for num_patches in num_patches_list:
-            image_tokens = IMG_START_TOKEN + IMG_CONTEXT_TOKEN * self.num_image_token * num_patches + IMG_END_TOKEN
-            query = query.replace('<image>', image_tokens, 1)
-            print('chat query', query)
+        # for num_patches in num_patches_list:
+        #     image_tokens = IMG_START_TOKEN + IMG_CONTEXT_TOKEN * self.num_image_token * num_patches + IMG_END_TOKEN
+        #     query = query.replace('<image>', image_tokens, 1)
+
+        query = '''<|user|><img><IMG_CONTEXT></img><|end|><|assistant|>'''
 
         model_inputs = tokenizer(query, return_tensors='pt')
         input_ids = model_inputs['input_ids'].cuda()
@@ -296,16 +299,16 @@ class InternVLChatModel(PreTrainedModel):
             **generation_config
         )
         response = tokenizer.batch_decode(generation_output, skip_special_tokens=True)[0]
-        response = response.split(template.sep)[0].strip()
-        history.append((question, response))
-        if return_history:
-            return response, history
-        else:
-            query_to_print = query.replace(IMG_CONTEXT_TOKEN, '')
-            query_to_print = query_to_print.replace(f'{IMG_START_TOKEN}{IMG_END_TOKEN}', '<image>')
-            if verbose:
-                print(query_to_print, response)
-            return response
+        # response = response.split(template.sep)[0].strip()
+        # history.append((question, response))
+        # if return_history:
+        #     return response, history
+        # else:
+        #     query_to_print = query.replace(IMG_CONTEXT_TOKEN, '')
+        #     query_to_print = query_to_print.replace(f'{IMG_START_TOKEN}{IMG_END_TOKEN}', '<image>')
+        #     if verbose:
+        #         print(query_to_print, response)
+        return response
 
     @torch.no_grad()
     def generate(
