@@ -22,11 +22,15 @@ model = InternVLChatModel.from_pretrained(
     revision='7f49802f5bf1e6e3d20b6f69268701c7eb67e037').to(config.device)
 tokenizer = AutoTokenizer.from_pretrained(path, trust_remote_code=True, use_fast=False, 
                                           revision='7f49802f5bf1e6e3d20b6f69268701c7eb67e037')
+tokenizer.padding_side = 'left'
 
+model.mlp1 = model.mlp1.to(torch.float32)
+
+params = list(model.mlp1.parameters())# + list(model.vision_model.encoder.parameters())
+
+print(f'Training: {params}')
 # we will drop all but last patch & train mlp1; mlp1 will be where we do vector arythmetic and probes.
-print(f'Training {model.mlp1}')
-optimizer = torch.optim.AdamW(model.mlp1.parameters(), lr=config.lr)
-
+optimizer = torch.optim.AdamW(params, lr=config.lr)
 
 
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
@@ -96,12 +100,12 @@ def dynamic_preprocess(image, min_num=1, max_num=12, image_size=448, use_thumbna
     return processed_images
 
 # TODO can make a batch process within data pipeline
-def load_image(image_file, pil_image=None, input_size=448, max_num=12):
+def load_image(image_file, pil_image=None, input_size=224, max_num=12):
     if not pil_image:
         pil_image = Image.open(image_file)
     image = pil_image.convert('RGB')
     transform = build_transform(input_size=input_size)
-    images = dynamic_preprocess(image, image_size=input_size, use_thumbnail=True, max_num=max_num)
-    pixel_values = [transform(image) for image in images]
+    # images = dynamic_preprocess(image, image_size=input_size, use_thumbnail=True, max_num=max_num)
+    pixel_values = [transform(image) for image in [image]]
     pixel_values = torch.stack(pixel_values)
     return pixel_values

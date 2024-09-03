@@ -47,7 +47,7 @@ class InternVLChatModel(PreTrainedModel):
         self.patch_size = patch_size
         self.select_layer = config.select_layer
         self.template = config.template
-        self.num_image_token = int((image_size // patch_size) ** 2 * (config.downsample_ratio ** 2))
+        self.num_image_token = 1#int((image_size // patch_size) ** 2 * (config.downsample_ratio ** 2))
         self.downsample_ratio = config.downsample_ratio
         self.ps_version = config.ps_version
         use_flash_attn = use_flash_attn if has_flash_attn else False
@@ -188,13 +188,12 @@ class InternVLChatModel(PreTrainedModel):
                 pixel_values=pixel_values,
                 output_hidden_states=True,
                 return_dict=True).hidden_states[self.select_layer]
-        vit_embeds = vit_embeds[:, :1, :]
+        vit_embeds = vit_embeds[:, :, :].mean(1)
 
         # h = w = int(vit_embeds.shape[1] ** 0.5)
         # vit_embeds = vit_embeds.reshape(vit_embeds.shape[0], h, w, -1)
         # vit_embeds = self.pixel_shuffle(vit_embeds, scale_factor=self.downsample_ratio)
         vit_embeds = vit_embeds.reshape(pixel_values.shape[0], -1, vit_embeds.shape[-1])
-        print(vit_embeds.shape, 'vit_embeds_shape')
 
         vit_embeds = self.mlp1(vit_embeds)
         return vit_embeds
@@ -281,6 +280,7 @@ class InternVLChatModel(PreTrainedModel):
         for num_patches in num_patches_list:
             image_tokens = IMG_START_TOKEN + IMG_CONTEXT_TOKEN * self.num_image_token * num_patches + IMG_END_TOKEN
             query = query.replace('<image>', image_tokens, 1)
+            print('chat query', query)
 
         model_inputs = tokenizer(query, return_tensors='pt')
         input_ids = model_inputs['input_ids'].cuda()
