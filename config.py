@@ -2,7 +2,7 @@ import torch
 
 lr = 1e-5
 
-path = './pooled_inter-est'
+path = './inter-est_pooled'
 save_path = '/home/ryn_mote/Misc/vlm_with_pooled_for_text_genrec/inter-est'
 
 epochs = 1

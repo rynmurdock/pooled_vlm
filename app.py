@@ -5,7 +5,8 @@ import random
 import pandas as pd
 import gradio as gr
 import numpy as np
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LinearRegression
+from sklearn.svm import SVC
 from sklearn import preprocessing
 import time
 import torch
@@ -36,13 +37,13 @@ pipe.scheduler = EulerDiscreteScheduler.from_config(pipe.scheduler.config, times
 with torch.cuda.amp.autocast(True, torch.bfloat16):
     # extract eos/mean embedding
     pixel_values = load_image(image_file='blank.png', max_num=1).cuda()
-    base_embed = model.extract_feature(pixel_values.to(torch.bfloat16)).detach().to('cpu').float()
+    base_embed = model.extract_feature(pixel_values.to(torch.bfloat16)).detach().float()
 
 
 
 def get_text(embed):
     with torch.cuda.amp.autocast(True, torch.bfloat16):
-        generation_config = dict(max_new_tokens=32, do_sample=False,)
+        generation_config = dict(max_new_tokens=32, do_sample=False, temperature=.5, top_p=.92)
 
         # single-image single-round conversation (单图单轮对话)
         pixel_values = 0
@@ -70,13 +71,13 @@ random.shuffle(prompt_list)
 
 
 calibrate_prompts = [
-    "4k fish sketch",
-    'surrealist art photography',
-    'a psychedelic, fractal fish sketch',
-    'a beautiful collage',
-    'abstract fish sketch',
-    'an eldritch image',
-    'a fish sketch',
+    "4k fish",
+    'grimey surrealist horror fish',
+    'anime fish',
+    'a photo of a monster',
+    'an abstract painting',
+    'an eldritch image painted on a wall',
+    'a fish photo',
     ]
 
 NOT_calibrate_prompts = [
@@ -109,6 +110,7 @@ NOT_calibrate_prompts = [
     'a timeless, dark digital art piece with gorgeous gradients: the hanged man',
     '',
 ]
+
 
 
 global_idx = 0
@@ -148,38 +150,43 @@ def next_image():
                 ys_t = [0, 1]
                 print('Not enough ratings.')
             else:
-                indices = random.sample(pos_indices, mini) + random.sample(neg_indices, mini)
+                # indices = random.sample(pos_indices, mini) + random.sample(neg_indices, mini)
                 ys_t = [ys[i] for i in indices]
+                feature_embs = torch.stack([embs[e][0, 0].detach().cpu() for e in indices]).squeeze()
                 
-                #if len(pos_indices) > 15:
-                #    to_drop = pos_indices.pop(0)
-                #    ys.pop(to_drop)
-                #    embs.pop(to_drop)
-                #    print('\n\n\ndropping\n\n\n')
-                #elif len(neg_indices) > 15:
+                if len(pos_indices) > 8:
+                   to_drop = pos_indices.pop(0)
+                   ys.pop(to_drop)
+                   embs.pop(to_drop)
+                   print('\n\n\ndropping\n\n\n')
+                # elif len(neg_indices) > 8:
                 #    to_drop = neg_indices.pop(0)
                 #    ys.pop(to_drop)
                 #    embs.pop(to_drop)
                 #    print('\n\n\ndropping\n\n\n')
                 
                 
-
-                feature_embs = torch.stack([embs[e][0, 0].detach().cpu() for e in indices]).squeeze()
                 # scaler = preprocessing.StandardScaler().fit(feature_embs)
                 # feature_embs = scaler.transform(feature_embs)
+                # ys_t = ys
+                
                 print(np.array(feature_embs).shape, np.array(ys_t).shape)
             
-            
-            # sol = LogisticRegression().fit(np.array(feature_embs), np.array(torch.tensor(ys_t).unsqueeze(1).float())).coef_
-            sol = torch.linalg.lstsq(torch.tensor(ys_t).unsqueeze(1).float(), torch.tensor(feature_embs).float()).solution
+            # sol = LinearRegression().fit(np.array(feature_embs), np.array(torch.tensor(ys_t).unsqueeze(1).float())).coef_
+            sol = torch.linalg.lstsq(torch.tensor(ys_t).unsqueeze(1).float(), torch.tensor(feature_embs).float(),).solution
+
+            # neg_sol = torch.linalg.lstsq((torch.tensor(ys_t).unsqueeze(1).float() - 1) * -1, torch.tensor(feature_embs).float()).solution
+
 
             # pos_sol = torch.stack([embs[i][0, 0] for i in range(len(ys_t)) if ys_t[i] > .5]).mean(0, keepdim=True)
             # neg_sol = torch.stack([embs[i][0, 0] for i in range(len(ys_t)) if ys_t[i] < .5]).mean(0, keepdim=True)
-
-            # sol = pos_sol - neg_sol
-
+            # sol = (sol - neg_sol)
+            
             # could have a base vector of a black image
             sol = torch.tensor(sol, dtype=torch.float16).to('cuda')
+
+            print(sol.shape)
+
             # TODO mean of positives works
             
 
@@ -263,10 +270,9 @@ with gr.Blocks(css=css) as demo:
                  [b4],
                  [b1, b2, b3, b4, img, txt])
 
-demo.launch(server_name="0.0.0.0")  # Share your demo with just 1 extra parameter 🚀
+demo.launch()  # Share your demo with just 1 extra parameter 🚀
 
 
 
-# TODO drop in whole new image/text model
-# TODO move layernorm model
+# TODO use CLIP text encoder pooled & keep frozen
 

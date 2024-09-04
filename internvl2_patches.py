@@ -105,6 +105,7 @@ class InternVLChatModel(PreTrainedModel):
         input_embeds = self.language_model.get_input_embeddings()(input_ids)
 
         vit_embeds = self.extract_feature(pixel_values)
+        vit_embeds = self.mlp1(vit_embeds)
         vit_batch_size = pixel_values.shape[0]
 
         B, N, C = input_embeds.shape
@@ -199,8 +200,6 @@ class InternVLChatModel(PreTrainedModel):
         # vit_embeds = vit_embeds.reshape(vit_embeds.shape[0], h, w, -1)
         # vit_embeds = self.pixel_shuffle(vit_embeds, scale_factor=self.downsample_ratio)
         vit_embeds = vit_embeds.reshape(pixel_values.shape[0], -1, vit_embeds.shape[-1])
-
-        vit_embeds = self.mlp1(vit_embeds)
         return vit_embeds
 
     def batch_chat(self, tokenizer, pixel_values, questions, generation_config, num_patches_list=None,
@@ -330,7 +329,9 @@ class InternVLChatModel(PreTrainedModel):
                 vit_embeds = visual_features
             else:
                 vit_embeds = self.extract_feature(pixel_values)
-                
+            vit_embeds = self.mlp1(vit_embeds)
+            
+
             input_embeds = self.language_model.get_input_embeddings()(input_ids)
             B, N, C = input_embeds.shape
             input_embeds = input_embeds.reshape(B * N, C)
