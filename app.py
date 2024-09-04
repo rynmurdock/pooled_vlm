@@ -5,7 +5,7 @@ import random
 import pandas as pd
 import gradio as gr
 import numpy as np
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 from sklearn import preprocessing
 import time
@@ -43,11 +43,12 @@ with torch.cuda.amp.autocast(True, torch.bfloat16):
 
 def get_text(embed):
     with torch.cuda.amp.autocast(True, torch.bfloat16):
-        generation_config = dict(max_new_tokens=32, do_sample=False, temperature=.5, top_p=.92)
+        generation_config = dict(max_new_tokens=32, do_sample=False, 
+                                                    temperature=.5, top_p=.92)
 
         # single-image single-round conversation (单图单轮对话)
         pixel_values = 0
-        question = '''''' # not really used # TODO
+        question = '''''' # not really used # TODO & pixel_values as well
         response = model.chat(tokenizer, pixel_values, question, generation_config, visual_features=embed.to(torch.bfloat16))
         print(response)
         return response
@@ -153,6 +154,13 @@ def next_image():
                 # indices = random.sample(pos_indices, mini) + random.sample(neg_indices, mini)
                 ys_t = [ys[i] for i in indices]
                 feature_embs = torch.stack([embs[e][0, 0].detach().cpu() for e in indices]).squeeze()
+
+                # balance pos/negatives?
+                for e in indices:
+                    w = len(pos_indices) / len(neg_indices)
+                    feature_embs[e] = feature_embs[e] * w if ys_t[e] > .5 else feature_embs[e] * (1-w)
+                    # if w < 1:
+                    #     feature_embs *= -1
                 
                 if len(pos_indices) > 8:
                    to_drop = pos_indices.pop(0)
@@ -172,15 +180,15 @@ def next_image():
                 
                 print(np.array(feature_embs).shape, np.array(ys_t).shape)
             
-            # sol = LinearRegression().fit(np.array(feature_embs), np.array(torch.tensor(ys_t).unsqueeze(1).float())).coef_
-            sol = torch.linalg.lstsq(torch.tensor(ys_t).unsqueeze(1).float(), torch.tensor(feature_embs).float(),).solution
+            # sol = SVC(kernel='linear', C=10, class_weight='balanced').fit(np.array(feature_embs), np.array(torch.tensor(ys_t).unsqueeze(1).float())).coef_
+            sol = torch.linalg.lstsq(torch.tensor(ys_t).unsqueeze(1).float() * 2 - 1, torch.tensor(feature_embs).float(),).solution
 
             # neg_sol = torch.linalg.lstsq((torch.tensor(ys_t).unsqueeze(1).float() - 1) * -1, torch.tensor(feature_embs).float()).solution
 
 
             # pos_sol = torch.stack([embs[i][0, 0] for i in range(len(ys_t)) if ys_t[i] > .5]).mean(0, keepdim=True)
             # neg_sol = torch.stack([embs[i][0, 0] for i in range(len(ys_t)) if ys_t[i] < .5]).mean(0, keepdim=True)
-            # sol = (sol - neg_sol)
+            # sol = 2 * (sol - neg_sol)
             
             # could have a base vector of a black image
             sol = torch.tensor(sol, dtype=torch.float16).to('cuda')
@@ -270,7 +278,7 @@ with gr.Blocks(css=css) as demo:
                  [b4],
                  [b1, b2, b3, b4, img, txt])
 
-demo.launch()  # Share your demo with just 1 extra parameter 🚀
+demo.launch(share=True)  # Share your demo with just 1 extra parameter 🚀
 
 
 

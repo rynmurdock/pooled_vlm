@@ -27,10 +27,10 @@ img_context_token_id = tokenizer.convert_tokens_to_ids('<IMG_CONTEXT>')
 model.img_context_token_id = img_context_token_id
 
 model.mlp1 = model.mlp1.to(torch.float32)
-model.vision_model.encoder = model.vision_model.encoder.to(torch.float32)
-print(model.mlp1, model.vision_model.encoder)
+# model.vision_model.encoder = model.vision_model.encoder.to(torch.float32)
+print(model.mlp1,)
 
-params = list(model.mlp1.parameters()) + list(model.vision_model.encoder.parameters())
+params = list(model.mlp1.parameters())# + list(model.vision_model.encoder.parameters())
 
 print(f'Training: {params}')
 # we will drop all but last patch & train mlp1; mlp1 will be where we do vector arythmetic and probes.

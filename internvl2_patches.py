@@ -21,6 +21,9 @@ from conversation import get_conv_template
 from modeling_intern_vit import InternVisionModel, has_flash_attn
 from modeling_phi3 import Phi3ForCausalLM
 
+from transformers import CLIPProcessor, CLIPModel
+
+
 logger = logging.get_logger(__name__)
 
 
@@ -59,7 +62,14 @@ class InternVLChatModel(PreTrainedModel):
         if vision_model is not None:
             self.vision_model = vision_model
         else:
-            self.vision_model = InternVisionModel(config.vision_config)
+            self.vision_model = CLIPModel.from_pretrained(
+                "openai/clip-vit-base-patch16",
+                # attn_implementation="flash_attention_2",
+                # device_map=device,
+                # torch_dtype=torch_dtype,
+            )
+            # self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+
         if language_model is not None:
             self.language_model = language_model
         else:
@@ -70,7 +80,7 @@ class InternVLChatModel(PreTrainedModel):
             else:
                 raise NotImplementedError(f'{config.llm_config.architectures[0]} is not implemented.')
 
-        vit_hidden_size = config.vision_config.hidden_size
+        vit_hidden_size = 512# config.vision_config.hidden_size
         llm_hidden_size = config.llm_config.hidden_size
 
         self.mlp1 = nn.Sequential(
@@ -181,24 +191,11 @@ class InternVLChatModel(PreTrainedModel):
         return x
 
     def extract_feature(self, pixel_values):
-        # if self.select_layer == -1:
-        #     vit_embeds = self.vision_model(
-        #         pixel_values=pixel_values,
-        #         output_hidden_states=False,
-        #         return_dict=True).last_hidden_state
-        # else:
-        #     vit_embeds = self.vision_model(
-        #         pixel_values=pixel_values,
-        #         output_hidden_states=True,
-        #         return_dict=True).hidden_states[self.select_layer]
-        vit_embeds = self.vision_model(
-                pixel_values=pixel_values,
-                output_hidden_states=False,
-                return_dict=True).pooler_output
+        # inputs = self.processor(images=pixel_values, 
+        #                         return_tensors="pt").to(self.vision_model.device, self.vision_model.dtype)
+        vit_embeds = self.vision_model.get_image_features(pixel_values,
+                return_dict=True)
 
-        # h = w = int(vit_embeds.shape[1] ** 0.5)
-        # vit_embeds = vit_embeds.reshape(vit_embeds.shape[0], h, w, -1)
-        # vit_embeds = self.pixel_shuffle(vit_embeds, scale_factor=self.downsample_ratio)
         vit_embeds = vit_embeds.reshape(pixel_values.shape[0], -1, vit_embeds.shape[-1])
         return vit_embeds
 
@@ -255,12 +252,6 @@ class InternVLChatModel(PreTrainedModel):
              num_patches_list=None, IMG_START_TOKEN='<img>', IMG_END_TOKEN='</img>', IMG_CONTEXT_TOKEN='<IMG_CONTEXT>',
              verbose=False, visual_features=None):
 
-        # if history is None and pixel_values is not None and '<image>' not in question:
-        #     question = '<image>\n' + question
-
-        # if num_patches_list is None:
-        #     num_patches_list = [pixel_values.shape[0]] if pixel_values is not None else []
-        # assert pixel_values is None or len(pixel_values) == sum(num_patches_list)
 
         img_context_token_id = tokenizer.convert_tokens_to_ids(IMG_CONTEXT_TOKEN)
         self.img_context_token_id = img_context_token_id
@@ -268,22 +259,6 @@ class InternVLChatModel(PreTrainedModel):
         template = get_conv_template(self.template)
         # template.system_message = self.system_message
         eos_token_id = tokenizer.convert_tokens_to_ids(template.sep)
-
-        # history = [] if history is None else history
-        # for (old_question, old_answer) in history:
-        #     template.append_message(template.roles[0], old_question)
-        #     template.append_message(template.roles[1], old_answer)
-        # template.append_message(template.roles[0], question)
-        # template.append_message(template.roles[1], None)
-        # query = template.get_prompt()
-
-        # if verbose and pixel_values is not None:
-        #     image_bs = pixel_values.shape[0]
-        #     print(f'dynamic ViT batch size: {image_bs}')
-
-        # for num_patches in num_patches_list:
-        #     image_tokens = IMG_START_TOKEN + IMG_CONTEXT_TOKEN * self.num_image_token * num_patches + IMG_END_TOKEN
-        #     query = query.replace('<image>', image_tokens, 1)
 
         query = '''<|user|><img><IMG_CONTEXT></img><|end|><|assistant|>'''
 
@@ -299,15 +274,7 @@ class InternVLChatModel(PreTrainedModel):
             **generation_config
         )
         response = tokenizer.batch_decode(generation_output, skip_special_tokens=True)[0]
-        # response = response.split(template.sep)[0].strip()
-        # history.append((question, response))
-        # if return_history:
-        #     return response, history
-        # else:
-        #     query_to_print = query.replace(IMG_CONTEXT_TOKEN, '')
-        #     query_to_print = query_to_print.replace(f'{IMG_START_TOKEN}{IMG_END_TOKEN}', '<image>')
-        #     if verbose:
-        #         print(query_to_print, response)
+
         return response
 
     @torch.no_grad()
