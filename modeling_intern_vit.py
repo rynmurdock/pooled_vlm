@@ -416,7 +416,7 @@ class InternVisionModel(PreTrainedModel):
             return_dict=return_dict,
         )
         last_hidden_state = encoder_outputs.last_hidden_state
-        pooled_output = last_hidden_state[:, 0, :]
+        pooled_output = last_hidden_state[:, :, :].mean(1)
 
         if not return_dict:
             return (last_hidden_state, pooled_output) + encoder_outputs[1:]

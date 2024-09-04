@@ -256,12 +256,12 @@ class InternVLChatModel(PreTrainedModel):
              num_patches_list=None, IMG_START_TOKEN='<img>', IMG_END_TOKEN='</img>', IMG_CONTEXT_TOKEN='<IMG_CONTEXT>',
              verbose=False, visual_features=None):
 
-        if history is None and pixel_values is not None and '<image>' not in question:
-            question = '<image>\n' + question
+        # if history is None and pixel_values is not None and '<image>' not in question:
+        #     question = '<image>\n' + question
 
-        if num_patches_list is None:
-            num_patches_list = [pixel_values.shape[0]] if pixel_values is not None else []
-        assert pixel_values is None or len(pixel_values) == sum(num_patches_list)
+        # if num_patches_list is None:
+        #     num_patches_list = [pixel_values.shape[0]] if pixel_values is not None else []
+        # assert pixel_values is None or len(pixel_values) == sum(num_patches_list)
 
         img_context_token_id = tokenizer.convert_tokens_to_ids(IMG_CONTEXT_TOKEN)
         self.img_context_token_id = img_context_token_id
@@ -330,6 +330,7 @@ class InternVLChatModel(PreTrainedModel):
                 vit_embeds = visual_features
             else:
                 vit_embeds = self.extract_feature(pixel_values)
+                
             input_embeds = self.language_model.get_input_embeddings()(input_ids)
             B, N, C = input_embeds.shape
             input_embeds = input_embeds.reshape(B * N, C)
