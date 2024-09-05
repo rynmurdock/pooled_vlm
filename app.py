@@ -18,14 +18,17 @@ from diffusers import StableDiffusionXLPipeline, UNet2DConditionModel, EulerDisc
 from huggingface_hub import hf_hub_download
 from safetensors.torch import load_file
 
+device = 'cuda'
+dtype = torch.bfloat16
+
 base = "stabilityai/stable-diffusion-xl-base-1.0"
 repo = "ByteDance/SDXL-Lightning"
 ckpt = "sdxl_lightning_4step_unet.safetensors" # Use the correct ckpt for your step setting!
 
 # Load model.
-unet = UNet2DConditionModel.from_config(base, subfolder="unet").to("cuda", torch.float16)
-unet.load_state_dict(load_file(hf_hub_download(repo, ckpt), device="cuda"))
-pipe = StableDiffusionXLPipeline.from_pretrained(base, unet=unet, torch_dtype=torch.float16, variant="fp16").to("cuda")
+unet = UNet2DConditionModel.from_config(base, subfolder="unet").to(device, dtype)
+unet.load_state_dict(load_file(hf_hub_download(repo, ckpt), device=device))
+pipe = StableDiffusionXLPipeline.from_pretrained(base, unet=unet, torch_dtype=dtype, variant="fp16").to(device)
 
 # Ensure sampler uses "trailing" timesteps.
 pipe.scheduler = EulerDiscreteScheduler.from_config(pipe.scheduler.config, timestep_spacing="trailing")
@@ -34,22 +37,22 @@ pipe.scheduler = EulerDiscreteScheduler.from_config(pipe.scheduler.config, times
 
 
 
-with torch.cuda.amp.autocast(True, torch.bfloat16):
+with torch.cuda.amp.autocast(True, dtype):
     # extract eos/mean embedding
-    pixel_values = load_image(image_file='blank.png', max_num=1).cuda()
-    base_embed = model.extract_feature(pixel_values.to(torch.bfloat16)).detach().float()
+    pixel_values = load_image(image_file='blank.png', max_num=1).to(device)
+    base_embed = model.extract_feature(pixel_values.to(dtype)).detach().float()
 
 
 
 def get_text(embed):
-    with torch.cuda.amp.autocast(True, torch.bfloat16):
-        generation_config = dict(max_new_tokens=32, do_sample=False, 
+    with torch.cuda.amp.autocast(True, dtype):
+        generation_config = dict(max_new_tokens=32, do_sample=True, 
                                                     temperature=.5, top_p=.92)
 
         # single-image single-round conversation (单图单轮对话)
         pixel_values = 0
         question = '''''' # not really used # TODO & pixel_values as well
-        response = model.chat(tokenizer, pixel_values, question, generation_config, visual_features=embed.to(torch.bfloat16))
+        response = model.chat(tokenizer, pixel_values, question, generation_config, visual_features=embed.to(dtype))
         print(response)
         return response
 
@@ -57,10 +60,10 @@ def get_image(text):
     return pipe(text, num_inference_steps=4, guidance_scale=0).images[0]
 
 def get_embed(img):
-    with torch.cuda.amp.autocast(True, torch.bfloat16):
+    with torch.cuda.amp.autocast(True, dtype):
         # extract eos/mean embedding
-        pixel_values = load_image(image_file='', pil_image=img, max_num=1).cuda()
-        embed = model.extract_feature(pixel_values.to(torch.bfloat16))
+        pixel_values = load_image(image_file='', pil_image=img, max_num=1).to(device)
+        embed = model.extract_feature(pixel_values.to(dtype))
     return embed.float()
 
 
@@ -73,12 +76,13 @@ random.shuffle(prompt_list)
 
 calibrate_prompts = [
     "4k fish",
-    'grimey surrealist horror fish',
+    'grimey surrealist horror photograph',
     'anime fish',
-    'a photo of a monster',
+    'a photo of a monster in the depths',
     'an abstract painting',
-    'an eldritch image painted on a wall',
-    'a fish photo',
+    'an eldritch being',
+    'a photo of hell',
+    'a cute monster'
     ]
 
 NOT_calibrate_prompts = [
@@ -155,18 +159,17 @@ def next_image():
                 ys_t = [ys[i] for i in indices]
                 feature_embs = torch.stack([embs[e][0, 0].detach().cpu() for e in indices]).squeeze()
 
-                # balance pos/negatives?
-                for e in indices:
-                    w = len(pos_indices) / len(neg_indices)
-                    feature_embs[e] = feature_embs[e] * w if ys_t[e] > .5 else feature_embs[e] * (1-w)
-                    # if w < 1:
-                    #     feature_embs *= -1
+                # # balance pos/negatives?
+                # for e in indices:
+                #     nw = (len(indices) / len(neg_indices))
+                #     w = (len(indices) / len(pos_indices))
+                #     feature_embs[e] = feature_embs[e] * w if ys_t[e] > .5 else feature_embs[e] * nw
                 
-                if len(pos_indices) > 8:
-                   to_drop = pos_indices.pop(0)
-                   ys.pop(to_drop)
-                   embs.pop(to_drop)
-                   print('\n\n\ndropping\n\n\n')
+                # if len(pos_indices) > 8:
+                #    to_drop = pos_indices.pop(0)
+                #    ys.pop(to_drop)
+                #    embs.pop(to_drop)
+                #    print('\n\n\ndropping\n\n\n')
                 # elif len(neg_indices) > 8:
                 #    to_drop = neg_indices.pop(0)
                 #    ys.pop(to_drop)
@@ -180,22 +183,22 @@ def next_image():
                 
                 print(np.array(feature_embs).shape, np.array(ys_t).shape)
             
-            # sol = SVC(kernel='linear', C=10, class_weight='balanced').fit(np.array(feature_embs), np.array(torch.tensor(ys_t).unsqueeze(1).float())).coef_
-            sol = torch.linalg.lstsq(torch.tensor(ys_t).unsqueeze(1).float() * 2 - 1, torch.tensor(feature_embs).float(),).solution
-
+            # sol = LogisticRegression().fit(np.array(feature_embs), np.array(torch.tensor(ys_t).unsqueeze(1).float() * 2 - 1)).coef_
+            # sol = torch.linalg.lstsq(torch.tensor(ys_t).unsqueeze(1).float()*2-1, torch.tensor(feature_embs).float(),).solution
             # neg_sol = torch.linalg.lstsq((torch.tensor(ys_t).unsqueeze(1).float() - 1) * -1, torch.tensor(feature_embs).float()).solution
+            # sol = torch.tensor(sol, dtype=dtype).to(device)
 
 
-            # pos_sol = torch.stack([embs[i][0, 0] for i in range(len(ys_t)) if ys_t[i] > .5]).mean(0, keepdim=True)
-            # neg_sol = torch.stack([embs[i][0, 0] for i in range(len(ys_t)) if ys_t[i] < .5]).mean(0, keepdim=True)
-            # sol = 2 * (sol - neg_sol)
+            pos_sol = torch.stack([feature_embs[i] for i in range(len(ys_t)) if ys_t[i] > .5]).mean(0, keepdim=True).to(device, dtype)
+            neg_sol = torch.stack([feature_embs[i] for i in range(len(ys_t)) if ys_t[i] < .5]).mean(0, keepdim=True).to(device, dtype)
             
             # could have a base vector of a black image
-            sol = torch.tensor(sol, dtype=torch.float16).to('cuda')
+            latest_pos = random.sample([feature_embs[i] for i in range(len(ys_t)) if ys_t[i] > .5], 1).to(device, dtype)
+
+            dif = pos_sol - neg_sol
+            sol = latest_pos + ((dif / dif.std()) * latest_pos.std())
 
             print(sol.shape)
-
-            # TODO mean of positives works
             
 
             text = get_text(sol)
@@ -205,12 +208,12 @@ def next_image():
             embs.append(embed)
 
             plt.close()
-            plt.hist(sol.detach().cpu().flatten())
+            plt.hist(sol.detach().cpu().float().flatten())
             plt.savefig('sol.jpg')
 
 
             plt.close()
-            plt.hist(embed.detach().cpu().flatten())
+            plt.hist(embed.detach().cpu().float().flatten())
             plt.savefig('embed.jpg')
             
             # torch.save(sol, f'./{start_time}.pt')
