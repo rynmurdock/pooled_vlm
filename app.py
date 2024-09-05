@@ -23,7 +23,7 @@ dtype = torch.bfloat16
 
 base = "stabilityai/stable-diffusion-xl-base-1.0"
 repo = "ByteDance/SDXL-Lightning"
-ckpt = "sdxl_lightning_4step_unet.safetensors" # Use the correct ckpt for your step setting!
+ckpt = "sdxl_lightning_8step_unet.safetensors" # Use the correct ckpt for your step setting!
 
 # Load model.
 unet = UNet2DConditionModel.from_config(base, subfolder="unet").to(device, dtype)
@@ -57,7 +57,7 @@ def get_text(embed):
         return response
 
 def get_image(text):
-    return pipe(text, num_inference_steps=4, guidance_scale=0).images[0]
+    return pipe(text, num_inference_steps=8, guidance_scale=0).images[0]
 
 def get_embed(img):
     with torch.cuda.amp.autocast(True, dtype):
@@ -74,18 +74,14 @@ random.shuffle(prompt_list)
 
 
 
-calibrate_prompts = [
-    "4k fish",
-    'grimey surrealist horror photograph',
-    'anime fish',
-    'a photo of a monster in the depths',
+NOT_calibrate_prompts = [
     'an abstract painting',
-    'an eldritch being',
+    'unique streetwear  design that blends the old with the new. Combine bold, urban typography with retro graphics, taking inspiration from distressed signage and graffiti. Use a range of earthy tones to give the design a vintage aesthetic, while adding a modern twist with a stylistic rendering of the graphics',
     'a photo of hell',
-    'a cute monster'
+    ''
     ]
 
-NOT_calibrate_prompts = [
+calibrate_prompts = [
     "4k photo",
     'surrealist art',
     'a psychedelic, fractal view',
@@ -192,8 +188,8 @@ def next_image():
             pos_sol = torch.stack([feature_embs[i] for i in range(len(ys_t)) if ys_t[i] > .5]).mean(0, keepdim=True).to(device, dtype)
             neg_sol = torch.stack([feature_embs[i] for i in range(len(ys_t)) if ys_t[i] < .5]).mean(0, keepdim=True).to(device, dtype)
             
-            # could have a base vector of a black image
-            latest_pos = random.sample([feature_embs[i] for i in range(len(ys_t)) if ys_t[i] > .5], 1).to(device, dtype)
+            # could j have a base vector of a black image
+            latest_pos = (random.sample([feature_embs[i] for i in range(len(ys_t)) if ys_t[i] > .5], 1)[0]).to(device, dtype)
 
             dif = pos_sol - neg_sol
             sol = latest_pos + ((dif / dif.std()) * latest_pos.std())

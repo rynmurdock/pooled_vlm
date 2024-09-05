@@ -195,7 +195,6 @@ class InternVLChatModel(PreTrainedModel):
         #                         return_tensors="pt").to(self.vision_model.device, self.vision_model.dtype)
         vit_embeds = self.vision_model.get_image_features(pixel_values,
                 return_dict=True)
-        print(vit_embeds.shape, 'vit output')
 
         vit_embeds = vit_embeds.reshape(pixel_values.shape[0], -1, vit_embeds.shape[-1])
         return vit_embeds
